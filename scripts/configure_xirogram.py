@@ -13,6 +13,7 @@ Applies:
 
 import json
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -188,7 +189,23 @@ def resign_fake_provisioning_profiles(bundle_id: str):
         print("[!] Warning: fake-codesigning profiles or certs not found, skipping profile resigning.")
         return
 
-    print(f"[*] Resigning fake provisioning profiles for bundle ID '{bundle_id}'...")
+    # Detect currently configured bundle ID from Telegram.mobileprovision
+    current_bundle_id = ""
+    tg_prof = profiles_dir / "Telegram.mobileprovision"
+    if tg_prof.exists():
+        try:
+            raw_tg_plist = subprocess.check_output(
+                ["openssl", "smime", "-inform", "der", "-verify", "-noverify", "-in", str(tg_prof)],
+                stderr=subprocess.DEVNULL
+            )
+            tg_dict = plistlib.loads(raw_tg_plist)
+            app_id = tg_dict.get("Entitlements", {}).get("application-identifier", "")
+            if "." in app_id:
+                current_bundle_id = app_id.split(".", 1)[1]
+        except Exception as e:
+            print(f"[!] Warning: failed to parse current bundle ID from Telegram.mobileprovision: {e}")
+
+    print(f"[*] Resigning fake provisioning profiles for bundle ID '{bundle_id}' (previous: '{current_bundle_id}')...")
     with tempfile.TemporaryDirectory() as td:
         pem_path = Path(td) / "combined.pem"
 
@@ -208,7 +225,11 @@ def resign_fake_provisioning_profiles(bundle_id: str):
                 ["openssl", "smime", "-inform", "der", "-verify", "-noverify", "-in", str(prof)],
                 stderr=subprocess.DEVNULL
             )
-            updated_text = plist_bytes.decode("latin1").replace("ph.telegra.Telegraph", bundle_id)
+            updated_text = plist_bytes.decode("latin1")
+            if current_bundle_id and current_bundle_id != bundle_id:
+                updated_text = updated_text.replace(current_bundle_id, bundle_id)
+            if "ph.telegra.Telegraph" in updated_text:
+                updated_text = updated_text.replace("ph.telegra.Telegraph", bundle_id)
 
             plist_temp = Path(td) / "temp.plist"
             plist_temp.write_bytes(updated_text.encode("latin1"))
