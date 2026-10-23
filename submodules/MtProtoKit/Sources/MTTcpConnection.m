@@ -835,6 +835,7 @@ struct ctr_state {
     
     bool _delegateImplementsProgressUpdated;
     NSData *_firstPacketControlByte;
+    bool _useObfuscation;
     
     bool _addedControlHeader;
     bool _addedHelloHeader;
@@ -904,10 +905,18 @@ struct ctr_state {
         _interface = interface;
         _usageCalculationInfo = usageCalculationInfo;
         
-        _makeTcpConnectionInterface = context.makeTcpConnectionInterface;
-        
+        _useObfuscation = true;
         if (context.apiEnvironment.datacenterAddressOverrides[@(datacenterId)] != nil) {
             _firstPacketControlByte = [context.apiEnvironment tcpPayloadPrefix];
+            if (_firstPacketControlByte == nil && _scheme.address.secret == nil) {
+                uint8_t intermediateBytes[4] = { 0xee, 0xee, 0xee, 0xee };
+                _firstPacketControlByte = [[NSData alloc] initWithBytes:intermediateBytes length:4];
+            }
+        }
+        
+        if (_firstPacketControlByte != nil && _scheme.address.secret == nil) {
+            _useIntermediateFormat = true;
+            _useObfuscation = false;
         }
         
         if (_scheme.address.secret != nil) {
@@ -1234,11 +1243,15 @@ struct ctr_state {
                     if (_useIntermediateFormat) {
                         int32_t length = (int32_t)data.length;
                         
-                        paddingSize = arc4random_uniform(16);
-                        if (paddingSize != 0) {
-                            arc4random_buf(padding, paddingSize);
+                        if (_useObfuscation) {
+                            paddingSize = arc4random_uniform(16);
+                            if (paddingSize != 0) {
+                                arc4random_buf(padding, paddingSize);
+                            }
+                            length += (int32_t)paddingSize;
+                        } else {
+                            paddingSize = 0;
                         }
-                        length += (int32_t)paddingSize;
                         
                         if (dataToSend.requestQuickAck) {
                             length |= 0x80000000;
@@ -1271,115 +1284,125 @@ struct ctr_state {
                     
                     completeDataLength += packetData.length;
                     
-                    if (!_addedControlHeader) {
-                        _addedControlHeader = true;
-                        for (int retryCount = 0; retryCount < 10; retryCount++) {
-                            uint8_t controlBytes[64];
-                            arc4random_buf(controlBytes, 64);
-                            
-                            int32_t controlVersion;
-                            if (_useIntermediateFormat) {
-                                controlVersion = 0xdddddddd;
-                            } else {
-                                controlVersion = 0xefefefef;
+                    if (!_useObfuscation) {
+                        if (!_addedControlHeader) {
+                            _addedControlHeader = true;
+                            if (_firstPacketControlByte != nil) {
+                                [completeData appendData:_firstPacketControlByte];
                             }
-                            
-                            memcpy(controlBytes + 56, &controlVersion, 4);
-                            int16_t datacenterTag = (int16_t)_datacenterTag;
-                            memcpy(controlBytes + 60, &datacenterTag, 2);
-                            
-                            uint8_t controlBytesReversed[64];
-                            for (int i = 0; i < 64; i++) {
-                                controlBytesReversed[i] = controlBytes[64 - 1 - i];
-                            }
-                            
-                            NSData *aesKey = [[NSData alloc] initWithBytes:controlBytes + 8 length:32];
-                            NSData *aesIv = [[NSData alloc] initWithBytes:controlBytes + 8 + 32 length:16];
-                            
-                            NSData *incomingAesKey = [[NSData alloc] initWithBytes:controlBytesReversed + 8 length:32];
-                            NSData *incomingAesIv = [[NSData alloc] initWithBytes:controlBytesReversed + 8 + 32 length:16];
-                            
-                            NSData *effectiveSecret = nil;
-                            if (_mtpSecret != nil) {
-                                effectiveSecret = _mtpSecret.secret;
-                            }
-                            if (effectiveSecret.length != 16 && effectiveSecret.length != 17) {
-                                effectiveSecret = nil;
-                            }
-                            
-                            if (effectiveSecret) {
-                                NSMutableData *aesKeyData = [[NSMutableData alloc] init];
-                                [aesKeyData appendData:aesKey];
-                                if (effectiveSecret.length == 16) {
-                                    [aesKeyData appendData:effectiveSecret];
-                                } else if (effectiveSecret.length == 17) {
-                                    [aesKeyData appendData:[effectiveSecret subdataWithRange:NSMakeRange(1, effectiveSecret.length - 1)]];
-                                }
-                                NSData *aesKeyHash = MTSha256(aesKeyData);
-                                aesKey = [aesKeyHash subdataWithRange:NSMakeRange(0, 32)];
+                        }
+                        [completeData appendData:packetData];
+                    } else {
+                        if (!_addedControlHeader) {
+                            _addedControlHeader = true;
+                            for (int retryCount = 0; retryCount < 10; retryCount++) {
+                                uint8_t controlBytes[64];
+                                arc4random_buf(controlBytes, 64);
                                 
-                                NSMutableData *incomingAesKeyData = [[NSMutableData alloc] init];
-                                [incomingAesKeyData appendData:incomingAesKey];
-                                if (effectiveSecret.length == 16) {
-                                    [incomingAesKeyData appendData:effectiveSecret];
-                                } else if (effectiveSecret.length == 17) {
-                                    [incomingAesKeyData appendData:[effectiveSecret subdataWithRange:NSMakeRange(1, effectiveSecret.length - 1)]];
-                                }
-                                NSData *incomingAesKeyHash = MTSha256(incomingAesKeyData);
-                                incomingAesKey = [incomingAesKeyHash subdataWithRange:NSMakeRange(0, 32)];
-                            }
-                            
-                            MTAesCtr *outgoingAesCtr = [[MTAesCtr alloc] initWithKey:aesKey.bytes keyLength:32 iv:aesIv.bytes decrypt:false];
-                            MTAesCtr *incomingAesCtr = [[MTAesCtr alloc] initWithKey:incomingAesKey.bytes keyLength:32 iv:incomingAesIv.bytes decrypt:false];
-                            
-                            uint8_t encryptedControlBytes[64];
-                            if (outgoingAesCtr == nil || incomingAesCtr == nil || ![outgoingAesCtr encryptIn:controlBytes out:encryptedControlBytes len:64]) {
-                                if (MTLogEnabled()) {
-                                    MTLog(@"***** %s: could not set up the obfuscation cipher", __PRETTY_FUNCTION__);
-                                }
-                                [self closeAndNotifyWithError:true];
-                                if (dataToSend.completion) {
-                                    dataToSend.completion(false);
-                                }
-                                return;
-                            }
-                            
-                            uint32_t intHeader = 0;
-                            memcpy(&intHeader, encryptedControlBytes, 4);
-                            
-                            if (effectiveSecret) {
-                                if (retryCount == 9) {
-                                    assert(false);
+                                int32_t controlVersion;
+                                if (_useIntermediateFormat) {
+                                    controlVersion = 0xdddddddd;
                                 } else {
-                                    if (intHeader == 0x44414548 ||
-                                        intHeader == 0x54534f50 ||
-                                        intHeader == 0x20544547 ||
-                                        intHeader == 0x4954504f ||
-                                        intHeader == 0xdddddddd ||
-                                        intHeader == 0xeeeeeeee ||
-                                        intHeader == 0x02010316) {
-                                        continue;
+                                    controlVersion = 0xefefefef;
+                                }
+                                
+                                memcpy(controlBytes + 56, &controlVersion, 4);
+                                int16_t datacenterTag = (int16_t)_datacenterTag;
+                                memcpy(controlBytes + 60, &datacenterTag, 2);
+                                
+                                uint8_t controlBytesReversed[64];
+                                for (int i = 0; i < 64; i++) {
+                                    controlBytesReversed[i] = controlBytes[64 - 1 - i];
+                                }
+                                
+                                NSData *aesKey = [[NSData alloc] initWithBytes:controlBytes + 8 length:32];
+                                NSData *aesIv = [[NSData alloc] initWithBytes:controlBytes + 8 + 32 length:16];
+                                
+                                NSData *incomingAesKey = [[NSData alloc] initWithBytes:controlBytesReversed + 8 length:32];
+                                NSData *incomingAesIv = [[NSData alloc] initWithBytes:controlBytesReversed + 8 + 32 length:16];
+                                
+                                NSData *effectiveSecret = nil;
+                                if (_mtpSecret != nil) {
+                                    effectiveSecret = _mtpSecret.secret;
+                                }
+                                if (effectiveSecret.length != 16 && effectiveSecret.length != 17) {
+                                    effectiveSecret = nil;
+                                }
+                                
+                                if (effectiveSecret) {
+                                    NSMutableData *aesKeyData = [[NSMutableData alloc] init];
+                                    [aesKeyData appendData:aesKey];
+                                    if (effectiveSecret.length == 16) {
+                                        [aesKeyData appendData:effectiveSecret];
+                                    } else if (effectiveSecret.length == 17) {
+                                        [aesKeyData appendData:[effectiveSecret subdataWithRange:NSMakeRange(1, effectiveSecret.length - 1)]];
+                                    }
+                                    NSData *aesKeyHash = MTSha256(aesKeyData);
+                                    aesKey = [aesKeyHash subdataWithRange:NSMakeRange(0, 32)];
+                                    
+                                    NSMutableData *incomingAesKeyData = [[NSMutableData alloc] init];
+                                    [incomingAesKeyData appendData:incomingAesKey];
+                                    if (effectiveSecret.length == 16) {
+                                        [incomingAesKeyData appendData:effectiveSecret];
+                                    } else if (effectiveSecret.length == 17) {
+                                        [incomingAesKeyData appendData:[effectiveSecret subdataWithRange:NSMakeRange(1, effectiveSecret.length - 1)]];
+                                    }
+                                    NSData *incomingAesKeyHash = MTSha256(incomingAesKeyData);
+                                    incomingAesKey = [incomingAesKeyHash subdataWithRange:NSMakeRange(0, 32)];
+                                }
+                                
+                                MTAesCtr *outgoingAesCtr = [[MTAesCtr alloc] initWithKey:aesKey.bytes keyLength:32 iv:aesIv.bytes decrypt:false];
+                                MTAesCtr *incomingAesCtr = [[MTAesCtr alloc] initWithKey:incomingAesKey.bytes keyLength:32 iv:incomingAesIv.bytes decrypt:false];
+                                
+                                uint8_t encryptedControlBytes[64];
+                                if (outgoingAesCtr == nil || incomingAesCtr == nil || ![outgoingAesCtr encryptIn:controlBytes out:encryptedControlBytes len:64]) {
+                                    if (MTLogEnabled()) {
+                                        MTLog(@"***** %s: could not set up the obfuscation cipher", __PRETTY_FUNCTION__);
+                                    }
+                                    [self closeAndNotifyWithError:true];
+                                    if (dataToSend.completion) {
+                                        dataToSend.completion(false);
+                                    }
+                                    return;
+                                }
+                                
+                                uint32_t intHeader = 0;
+                                memcpy(&intHeader, encryptedControlBytes, 4);
+                                
+                                if (effectiveSecret) {
+                                    if (retryCount == 9) {
+                                        assert(false);
+                                    } else {
+                                        if (intHeader == 0x44414548 ||
+                                            intHeader == 0x54534f50 ||
+                                            intHeader == 0x20544547 ||
+                                            intHeader == 0x4954504f ||
+                                            intHeader == 0xdddddddd ||
+                                            intHeader == 0xeeeeeeee ||
+                                            intHeader == 0x02010316) {
+                                            continue;
+                                        }
                                     }
                                 }
+                                
+                                NSMutableData *outData = [[NSMutableData alloc] initWithLength:64 + packetData.length];
+                                memcpy(outData.mutableBytes, controlBytes, 56);
+                                memcpy(outData.mutableBytes + 56, encryptedControlBytes + 56, 8);
+                                
+                                [outgoingAesCtr encryptIn:packetData.bytes out:outData.mutableBytes + 64 len:packetData.length];
+                                
+                                _incomingAesCtr = incomingAesCtr;
+                                _outgoingAesCtr = outgoingAesCtr;
+                                [completeData appendData:outData];
+                                
+                                break;
                             }
+                        } else {
+                            NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:packetData.length];
+                            [_outgoingAesCtr encryptIn:packetData.bytes out:encryptedData.mutableBytes len:packetData.length];
                             
-                            NSMutableData *outData = [[NSMutableData alloc] initWithLength:64 + packetData.length];
-                            memcpy(outData.mutableBytes, controlBytes, 56);
-                            memcpy(outData.mutableBytes + 56, encryptedControlBytes + 56, 8);
-                            
-                            [outgoingAesCtr encryptIn:packetData.bytes out:outData.mutableBytes + 64 len:packetData.length];
-                            
-                            _incomingAesCtr = incomingAesCtr;
-                            _outgoingAesCtr = outgoingAesCtr;
-                            [completeData appendData:outData];
-                            
-                            break;
+                            [completeData appendData:encryptedData];
                         }
-                    } else {
-                        NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:packetData.length];
-                        [_outgoingAesCtr encryptIn:packetData.bytes out:encryptedData.mutableBytes len:packetData.length];
-                        
-                        [completeData appendData:encryptedData];
                     }
                     
                     if ([_mtpSecret isKindOfClass:[MTProxySecretType2 class]]) {
@@ -1892,7 +1915,11 @@ struct ctr_state {
     } else {
         decryptedData = [[NSMutableData alloc] initWithLength:rawData.length];
     }
-    [_incomingAesCtr encryptIn:rawData.bytes out:((uint8_t *)decryptedData.mutableBytes) + decryptOffset len:rawData.length];
+    if (_incomingAesCtr != nil) {
+        [_incomingAesCtr encryptIn:rawData.bytes out:((uint8_t *)decryptedData.mutableBytes) + decryptOffset len:rawData.length];
+    } else {
+        memcpy(((uint8_t *)decryptedData.mutableBytes) + decryptOffset, rawData.bytes, rawData.length);
+    }
 
     NSMutableData *data = decryptedData;
     

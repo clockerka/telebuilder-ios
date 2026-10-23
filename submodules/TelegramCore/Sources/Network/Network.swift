@@ -552,6 +552,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 NSNumber(value: 4): MTDatacenterAddress(ip: "150.241.85.49", port: 2398, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil),
                 NSNumber(value: 5): MTDatacenterAddress(ip: "150.241.85.49", port: 2398, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil)
             ]
+            apiEnvironment.tcpPayloadPrefix = Data([0xee, 0xee, 0xee, 0xee])
             apiEnvironment.langPack = arguments.languagesCategory
             apiEnvironment.layer = NSNumber(value: Int(serialization.currentLayer()))
             apiEnvironment.disableUpdates = supplementary

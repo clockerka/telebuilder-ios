@@ -8,6 +8,9 @@
 #import <netinet/in.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 #import <objc/message.h>
 
 static void MTAvailabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void *info);

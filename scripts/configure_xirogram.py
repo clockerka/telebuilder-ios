@@ -304,7 +304,10 @@ def configure_network(server_ip: str, server_port: str, server_dc: str = "2"):
         override_entries.append(
             f'                NSNumber(value: {dc}): MTDatacenterAddress(ip: "{server_ip}", port: {server_port}, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil)'
         )
-    dc_overrides = "            apiEnvironment.datacenterAddressOverrides = [\n" + ",\n".join(override_entries) + "\n            ]\n"
+    dc_overrides = (
+        "            apiEnvironment.datacenterAddressOverrides = [\n" + ",\n".join(override_entries) + "\n            ]\n"
+        "            apiEnvironment.tcpPayloadPrefix = Data([0xee, 0xee, 0xee, 0xee])\n"
+    )
 
     existing_overrides_pattern = re.compile(
         r'[ \t]*apiEnvironment\.datacenterAddressOverrides\s*=.*?(?=\n\s*apiEnvironment\.langPack)',
