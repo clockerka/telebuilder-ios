@@ -10,6 +10,7 @@ Applies:
 - Custom Bundle ID (with automatic re-signing of fake provisioning profiles)
 """
 
+import datetime
 import json
 import os
 import plistlib
@@ -229,6 +230,24 @@ def resign_fake_provisioning_profiles(bundle_id: str):
                 updated_text = updated_text.replace(current_bundle_id, bundle_id)
             if "ph.telegra.Telegraph" in updated_text:
                 updated_text = updated_text.replace("ph.telegra.Telegraph", bundle_id)
+
+            # Ensure ExpirationDate is valid and well into the future (within cert lifetime, e.g. 2030-10-25)
+            updated_text = re.sub(
+                r'(<key>ExpirationDate</key>\s*<date>)[^<]*(</date>)',
+                r'\g<1>2030-10-25T00:00:00Z\2',
+                updated_text
+            )
+            now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            updated_text = re.sub(
+                r'(<key>CreationDate</key>\s*<date>)[^<]*(</date>)',
+                rf'\g<1>{now_iso}\2',
+                updated_text
+            )
+            updated_text = re.sub(
+                r'(<key>TimeToLive</key>\s*<integer>)[^<]*(</integer>)',
+                r'\g<1>1450\2',
+                updated_text
+            )
 
             plist_temp = Path(td) / "temp.plist"
             plist_temp.write_bytes(updated_text.encode("latin1"))
