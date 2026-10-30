@@ -45,11 +45,6 @@ on:
         required: true
         default: "ph.telegra.Telegraph"
         type: string
-      domain:
-        description: "Домен везде (e.g. t.me, mydomain.com)"
-        required: true
-        default: "t.me"
-        type: string
 
 jobs:
   build:
@@ -97,7 +92,7 @@ jobs:
           set -x
           sudo mkdir -p /Users/Shared
           cp -R "$GITHUB_WORKSPACE" /Users/Shared/
-          mv /Users/Shared/$(basename "$GITHUB_WORKSPACE") /Users/Shared/telegram-ios
+          mv /Users/Shared/$(basename "$GITHUB_WORKSPACE") /Users/Shared/telebuilder-ios
 
       - name: Configure Custom Server & Branding
         env:
@@ -110,16 +105,15 @@ jobs:
           API_ID: ${{ inputs.api_id }}
           API_HASH: ${{ inputs.api_hash }}
           BUNDLE_ID: ${{ inputs.bundle_id }}
-          DOMAIN: ${{ inputs.domain }}
         run: |
-          cd /Users/Shared/telegram-ios
+          cd /Users/Shared/telebuilder-ios
           python3 scripts/configure_telebuilder.py
 
       - name: Build the App
         run: |
           set -x
 
-          SOURCE_DIR=/Users/Shared/telegram-ios
+          SOURCE_DIR=/Users/Shared/telebuilder-ios
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
 
           cd $SOURCE_DIR
@@ -179,14 +173,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.SAFE_APP_NAME }}-ipa
-          path: /Users/Shared/telegram-ios/build/artifacts/*.ipa
+          path: /Users/Shared/telebuilder-ios/build/artifacts/*.ipa
           if-no-files-found: error
 
       - name: Upload DSYM Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.SAFE_APP_NAME }}-dsym
-          path: /Users/Shared/telegram-ios/build/artifacts/*.DSYMs.zip
+          path: /Users/Shared/telebuilder-ios/build/artifacts/*.DSYMs.zip
           if-no-files-found: ignore
 
       - name: Create GitHub Release
@@ -199,10 +193,9 @@ jobs:
             Сборка iOS приложения **${{ inputs.app_name }}** для приватного сервера Telegram.
             - **Bundle ID**: `${{ inputs.bundle_id }}`
             - **Server**: `${{ inputs.server_ip }}:${{ inputs.server_port }}`
-            - **Domain**: `${{ inputs.domain }}`
             - **Версия**: `${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})`
           files: |
-            /Users/Shared/telegram-ios/build/artifacts/*.ipa
-            /Users/Shared/telegram-ios/build/artifacts/*.DSYMs.zip
+            /Users/Shared/telebuilder-ios/build/artifacts/*.ipa
+            /Users/Shared/telebuilder-ios/build/artifacts/*.DSYMs.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

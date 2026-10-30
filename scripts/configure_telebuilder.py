@@ -410,7 +410,7 @@ def rebrand_strings_file(file_path: Path, app_name: str):
     def replace_value(match):
         key = match.group(1)
         val = match.group(2)
-        new_val = re.sub(r'\bTelegram\b(?!\.(org|me|dog|com))', app_name, val)
+        new_val = re.sub(r'\b(Telegram|Xirogram|Telebuilder)\b(?!\.(org|me|dog|com))', app_name, val, flags=re.IGNORECASE)
         return f'{key}{new_val}";'
 
     pattern = re.compile(r'("[^"]+"\s*=\s*")((?:[^"\\]|\\.)*)";')
@@ -427,30 +427,37 @@ def rebrand_app_ui(app_name: str):
     for target in strings_targets:
         rebrand_strings_file(target, app_name)
 
+    display_pattern = re.compile(r'"CFBundleDisplayName"\s*=\s*"[^"]*";')
+    name_pattern = re.compile(r'"CFBundleName"\s*=\s*"[^"]*";')
+
     for infoplist in ROOT.glob("Telegram/Telegram-iOS/*.lproj/InfoPlist.strings"):
         rebrand_strings_file(infoplist, app_name)
         text = infoplist.read_text(encoding="utf-8")
         display_line = f'"CFBundleDisplayName" = "{app_name}";'
         name_line = f'"CFBundleName" = "{app_name}";'
-        lines_to_add = []
-        if '"CFBundleDisplayName"' not in text:
-            lines_to_add.append(display_line)
-        if '"CFBundleName"' not in text:
-            lines_to_add.append(name_line)
-        if lines_to_add:
-            infoplist.write_text("\n".join(lines_to_add) + "\n" + text, encoding="utf-8")
+        if display_pattern.search(text):
+            text = display_pattern.sub(display_line, text)
+        else:
+            text = display_line + "\n" + text
+        if name_pattern.search(text):
+            text = name_pattern.sub(name_line, text)
+        else:
+            text = name_line + "\n" + text
+        infoplist.write_text(text, encoding="utf-8")
 
     for infoplist in ROOT.glob("Telegram/WidgetKitWidget/*.lproj/InfoPlist.strings"):
         text = infoplist.read_text(encoding="utf-8")
         display_line = f'"CFBundleDisplayName" = "{app_name}";'
         name_line = f'"CFBundleName" = "{app_name}";'
-        lines_to_add = []
-        if '"CFBundleDisplayName"' not in text:
-            lines_to_add.append(display_line)
-        if '"CFBundleName"' not in text:
-            lines_to_add.append(name_line)
-        if lines_to_add:
-            infoplist.write_text("\n".join(lines_to_add) + "\n" + text, encoding="utf-8")
+        if display_pattern.search(text):
+            text = display_pattern.sub(display_line, text)
+        else:
+            text = display_line + "\n" + text
+        if name_pattern.search(text):
+            text = name_pattern.sub(name_line, text)
+        else:
+            text = name_line + "\n" + text
+        infoplist.write_text(text, encoding="utf-8")
 
     tg_loc_path = ROOT / "submodules/LegacyComponents/Sources/TGLocalization.m"
     if tg_loc_path.exists():
@@ -482,7 +489,7 @@ def configure_app_name(app_name: str):
     for p in [ROOT / "Telegram/Telegram-iOS/Info.plist", ROOT / "Telegram/Telegram-iOS/InfoBazel.plist"]:
         if p.exists():
             s = p.read_text()
-            s = s.replace("<string>${APP_NAME}</string>", f"<string>{escaped_name}</string>")
+            s = re.sub(r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)', rf'\g<1>{escaped_name}\2', s)
             p.write_text(s)
 
     rebrand_app_ui(app_name)
