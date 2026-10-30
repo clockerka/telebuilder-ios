@@ -113,7 +113,7 @@ jobs:
           DOMAIN: ${{ inputs.domain }}
         run: |
           cd /Users/Shared/telegram-ios
-          python3 scripts/configure_xirogram.py
+          python3 scripts/configure_telebuilder.py
 
       - name: Build the App
         run: |

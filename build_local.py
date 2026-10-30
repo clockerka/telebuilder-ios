@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-build_local.py - Interactive macOS local builder for Telegram iOS (xirogram-iOS).
+build_local.py - Interactive macOS local builder for Telegram iOS (telebuilder-ios).
 Prompts user for all required parameters, applies custom MTProto configuration,
 and compiles a sideloadable IPA locally on macOS.
 """
@@ -143,19 +143,12 @@ def main():
         default="ph.telegra.Telegraph"
     )
 
-    domain = prompt_input(
-        "10. Домен для ссылок",
-        "Введите домен (например, t.me или mydomain.com)",
-        default="t.me"
-    )
-
     # Summary
     print_header("Параметры сборки")
     print(f"  {BOLD}Название:{RESET}      {app_name}")
     print(f"  {BOLD}Аватар:{RESET}        {avatar}")
     print(f"  {BOLD}Сервер:{RESET}        {server_ip}:{server_port} (DC {server_dc})")
     print(f"  {BOLD}Bundle ID:{RESET}     {bundle_id}")
-    print(f"  {BOLD}Домен:{RESET}         {domain}")
     print(f"  {BOLD}API ID / Hash:{RESET} {api_id} / {api_hash[:8]}...")
     print(f"  {BOLD}RSA Key:{RESET}       {rsa_key.splitlines()[0]}... ({len(rsa_key)} байт)")
 
@@ -192,9 +185,9 @@ def main():
     env["API_ID"] = api_id
     env["API_HASH"] = api_hash
     env["BUNDLE_ID"] = bundle_id
-    env["DOMAIN"] = domain
+    env["DOMAIN"] = "t.me"
 
-    config_script = ROOT / "scripts/configure_xirogram.py"
+    config_script = ROOT / "scripts/configure_telebuilder.py"
     subprocess.run([sys.executable, str(config_script)], env=env, cwd=ROOT, check=True)
 
     # 4. Import certificates & setup build number

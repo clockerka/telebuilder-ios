@@ -4,6 +4,7 @@ fastlane/test_output/*
 fastlane/fastlanematch
 build/*
 build-system/xirogram-configuration.json
+build-system/telebuilder-configuration.json
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -19,6 +20,7 @@ xcuserdata
 DerivedData
 *.hmap
 *.ipa
+*.ips
 *.xcuserstate
 .DS_Store
 *.dSYM

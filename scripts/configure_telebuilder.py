@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-configure_xirogram.py - Configures Telegram iOS (xirogram-iOS) for a private MTProto server.
+configure_telebuilder.py - Configures Telegram iOS (telebuilder-ios) for a private MTProto server.
 Applies:
 - Custom App Name
 - Custom App Icon (from any image format: PNG, JPG, WebP, SVG, GIF, HEIC, etc.)
@@ -8,7 +8,6 @@ Applies:
 - Custom Server MTProto RSA Public Key
 - Custom or Default API ID & API Hash
 - Custom Bundle ID (with automatic re-signing of fake provisioning profiles)
-- Custom Domain Everywhere (link parsing, preview, whitelist, universal links)
 """
 
 import json
@@ -580,9 +579,7 @@ def configure_domain(domain: str):
 
     print(f"[*] Configured domain '{domain}' across all link handlers and associated domains.")
 
-def configure_build_files(bundle_id: str, api_id: str, api_hash: str, domain: str):
-    url_scheme = re.sub(r'[^a-zA-Z0-9]', '', domain.split('.')[0]) or "tg"
-
+def configure_build_files(bundle_id: str, api_id: str, api_hash: str):
     config_data = {
         "bundle_id": bundle_id,
         "api_id": api_id,
@@ -592,14 +589,14 @@ def configure_build_files(bundle_id: str, api_id: str, api_hash: str, domain: st
         "is_internal_build": "false",
         "is_appstore_build": "true",
         "appstore_id": "686449807",
-        "app_specific_url_scheme": url_scheme,
+        "app_specific_url_scheme": "tg",
         "premium_iap_product_id": "",
         "enable_siri": False,
         "enable_icloud": False
     }
 
     (ROOT / "build-system/appstore-configuration.json").write_text(json.dumps(config_data, indent=2) + "\n")
-    (ROOT / "build-system/xirogram-configuration.json").write_text(json.dumps(config_data, indent=2) + "\n")
+    (ROOT / "build-system/telebuilder-configuration.json").write_text(json.dumps(config_data, indent=2) + "\n")
 
     build_path = ROOT / "Telegram/BUILD"
     build_content = build_path.read_text()
@@ -620,16 +617,16 @@ def configure_build_files(bundle_id: str, api_id: str, api_hash: str, domain: st
     print(f"[*] Configured build-system configuration files for bundle ID '{bundle_id}'")
 
 def main():
-    print("=== Xirogram iOS Configuration Script ===")
+    print("=== Telebuilder iOS Configuration Script ===")
     app_name = get_required("APP_NAME")
     avatar_url = get_required("AVATAR_URL")
     server_ip = get_required("SERVER_IP")
     server_port = get_required("SERVER_PORT")
     rsa_public_key = get_required("RSA_PUBLIC_KEY")
     bundle_id = get_required("BUNDLE_ID")
-    raw_domain = get_required("DOMAIN")
+    raw_domain = get_optional("DOMAIN", "")
 
-    domain = sanitize_domain(raw_domain)
+    domain = sanitize_domain(raw_domain) if raw_domain else ""
     api_id = get_optional("API_ID", "8")
     api_hash = get_optional("API_HASH", "7245de8e747a0d6fbe11f7cc14fcc0bb")
 
@@ -655,14 +652,14 @@ def main():
     print(f"App Name: {app_name}")
     print(f"Bundle ID: {bundle_id}")
     print(f"Server: {server_ip}:{server_port} (DC {server_dc})")
-    print(f"Domain: {domain}")
     print(f"API ID: {api_id}")
 
-    configure_build_files(bundle_id, api_id, api_hash, domain)
+    configure_build_files(bundle_id, api_id, api_hash)
     configure_app_name(app_name)
     configure_network(server_ip, server_port, server_dc)
     configure_rsa_key(rsa_public_key)
-    configure_domain(domain)
+    if domain and domain != "t.me":
+        configure_domain(domain)
     resign_fake_provisioning_profiles(bundle_id)
     convert_and_apply_icons(avatar_url)
 
