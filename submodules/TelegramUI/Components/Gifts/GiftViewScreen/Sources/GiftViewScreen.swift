@@ -4107,7 +4107,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                     var modifiedString = descriptionText
                     
                     for match in matches.reversed() {
-                        let matchRange = Range(match.range, in: descriptionText)!
+                        guard let matchRange = Range(match.range, in: descriptionText) else {
+                            continue
+                        }
                         let matchedSubstring = String(descriptionText[matchRange])
                         let replacedSubstring = matchedSubstring.replacingOccurrences(of: " ", with: "\u{00A0}")
                         modifiedString.replaceSubrange(matchRange, with: replacedSubstring)
@@ -4280,10 +4282,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     
                     if state.cachedSmallStarImage == nil || state.cachedSmallStarImage?.1 !== environment.theme {
-                        state.cachedSmallStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Premium/Stars/ButtonStar"), color: .white)!, theme)
+                        if let image = generateTintedImage(image: UIImage(bundleImageName: "Premium/Stars/ButtonStar"), color: .white) {
+                            state.cachedSmallStarImage = (image, theme)
+                        }
                     }
                     if state.cachedChevronImage == nil || state.cachedChevronImage?.1 !== environment.theme {
-                        state.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: linkColor)!, theme)
+                        if let image = generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: linkColor) {
+                            state.cachedChevronImage = (image, theme)
+                        }
                     }
                     
                     let textFont: UIFont
@@ -5533,10 +5539,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let linkColor = theme.actionSheet.controlAccentColor
                 
                 if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
-                    state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor) {
+                        state.cachedSmallChevronImage = (image, theme)
+                    }
                 }
                 if state.cachedHiddenImage == nil || state.cachedHiddenImage?.1 !== environment.theme {
-                    state.cachedHiddenImage = (generateTintedImage(image: UIImage(bundleImageName: "Premium/Collectible/Hidden"), color: textColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Premium/Collectible/Hidden"), color: textColor) {
+                        state.cachedHiddenImage = (image, theme)
+                    }
                 }
                 
                 var addressToOpen: String?
@@ -5792,7 +5802,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         })
             } else if state.inUpgradePreview {
                 if state.cachedStarImage == nil || state.cachedStarImage?.1 !== theme {
-                    state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor) {
+                        state.cachedStarImage = (image, theme)
+                    }
                 }
                 var buttonTitleItems: [AnyComponentWithIdentity<Empty>] = []
                 var upgradeString = strings.Gift_Upgrade_Upgrade
@@ -6028,13 +6040,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                         })
             } else if !incoming, let resellAmount, !isMyOwnedUniqueGift {
                 if state.cachedStarImage == nil || state.cachedStarImage?.1 !== theme {
-                    state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor) {
+                        state.cachedStarImage = (image, theme)
+                    }
                 }
                 if state.cachedTonImage == nil || state.cachedTonImage?.1 !== theme {
-                    state.cachedTonImage = (generateTintedImage(image: UIImage(bundleImageName: "Ads/TonAbout"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Ads/TonAbout"), color: theme.list.itemCheckColors.foregroundColor) {
+                        state.cachedTonImage = (image, theme)
+                    }
                 }
                 if state.cachedSubtitleStarImage == nil || state.cachedSubtitleStarImage?.1 !== environment.theme {
-                    state.cachedSubtitleStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/StarsCount"), color: .white)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/StarsCount"), color: .white) {
+                        state.cachedSubtitleStarImage = (image, theme)
+                    }
                 }
                 var buyString = strings.Gift_View_BuyFor
                 
@@ -6142,7 +6160,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             var upgradePriceButtonComponent: PlainButtonComponent?
             if showUpgradePreview, let _ = state.nextUpgradePrice {
                 if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
-                    state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.actionSheet.controlAccentColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.actionSheet.controlAccentColor) {
+                        state.cachedSmallChevronImage = (image, theme)
+                    }
                 }
                 let attributedString = NSMutableAttributedString(string: strings.Gift_Upgrade_SeePriceDecrease, font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)
                 if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {

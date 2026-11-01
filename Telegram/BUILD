@@ -526,7 +526,7 @@ icloud_fragment = "" if not telegram_enable_icloud else """
     telegram_icloud_environment="Production" if telegram_aps_environment == "production" else "Development"
 )
 
-associated_domains_fragment = """
+associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids else """
 <key>com.apple.developer.associated-domains</key>
 <array>
     <string>applinks:telegram.me</string>
@@ -534,9 +534,6 @@ associated_domains_fragment = """
     <string>applinks:*.t.me</string>
     <string>webcredentials:t.me</string>
     <string>webcredentials:telegram.org</string>
-    <string>applinks:web.sandytap.bond</string>
-    <string>applinks:*.web.sandytap.bond</string>
-    <string>webcredentials:web.sandytap.bond</string>
 </array>
 """
 
@@ -658,7 +655,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>MtProtoKit</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -699,7 +696,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>SwiftSignalKit</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -740,7 +737,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Postbox</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -784,7 +781,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>TelegramApi</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -802,7 +799,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>TelegramCore</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -883,7 +880,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>AsyncDisplayKit</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -901,7 +898,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Display</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -962,7 +959,7 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>TelegramUI</string>
     <key>CFBundlePackageType</key>
     <string>FMWK</string>
     """.format(
@@ -1925,7 +1922,7 @@ ios_application(
         ":RequiredDeviceCapabilitiesPlist",
         ":UrlTypesInfoPlist",
     ],
-    app_icons = [":DefaultIcon"],
+    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
     alternate_icons = [
         ":{}".format(name) for name in alternate_icon_folders
     ],

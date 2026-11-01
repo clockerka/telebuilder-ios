@@ -305,6 +305,9 @@ public func generateTintedImage(image: UIImage?, color: UIColor, backgroundColor
     }
     
     let imageSize = image.size
+    if imageSize.width <= 0.0 || imageSize.height <= 0.0 {
+        return nil
+    }
 
     UIGraphicsBeginImageContextWithOptions(imageSize, backgroundColor != nil, image.scale)
     if let context = UIGraphicsGetCurrentContext() {
@@ -314,17 +317,31 @@ public func generateTintedImage(image: UIImage?, color: UIColor, backgroundColor
         }
         
         let imageRect = CGRect(origin: CGPoint(), size: imageSize)
-        context.saveGState()
-        context.translateBy(x: imageRect.midX, y: imageRect.midY)
-        context.scaleBy(x: flipHorizontally ? -1.0 : 1.0, y: -1.0)
-        context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
-        context.clip(to: imageRect, mask: image.cgImage!)
-        context.setFillColor(color.cgColor)
-        context.fill(imageRect)
-        context.restoreGState()
+        if let cgImage = image.cgImage {
+            context.saveGState()
+            context.translateBy(x: imageRect.midX, y: imageRect.midY)
+            context.scaleBy(x: flipHorizontally ? -1.0 : 1.0, y: -1.0)
+            context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
+            context.clip(to: imageRect, mask: cgImage)
+            context.setFillColor(color.cgColor)
+            context.fill(imageRect)
+            context.restoreGState()
+        } else {
+            context.saveGState()
+            if flipHorizontally {
+                context.translateBy(x: imageRect.midX, y: imageRect.midY)
+                context.scaleBy(x: -1.0, y: 1.0)
+                context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
+            }
+            image.draw(in: imageRect)
+            context.setBlendMode(.sourceIn)
+            context.setFillColor(color.cgColor)
+            context.fill(imageRect)
+            context.restoreGState()
+        }
     }
     
-    let tintedImage = UIGraphicsGetImageFromCurrentImageContext()!
+    let tintedImage = UIGraphicsGetImageFromCurrentImageContext()
     UIGraphicsEndImageContext()
     
     return tintedImage

@@ -133,7 +133,7 @@ public final class StarsBalanceOverlayComponent: Component {
             }
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            let balance = presentationStringsFormattedNumber(Int32(self.starsBalance), presentationData.dateTimeFormat.groupingSeparator)
+            let balance = presentationStringsFormattedNumber(Int32(clamping: self.starsBalance), presentationData.dateTimeFormat.groupingSeparator)
             
             let rawString: String
             if component.peerId == component.context.account.peerId {
@@ -205,7 +205,9 @@ public final class StarsBalanceOverlayComponent: Component {
             let hasAction = component.currency == .stars && component.peerId == component.context.account.peerId
             if hasAction {
                 if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== component.theme {
-                    self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: component.theme.rootController.navigationBar.accentTextColor)!, component.theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: component.theme.rootController.navigationBar.accentTextColor) {
+                        self.cachedChevronImage = (image, component.theme)
+                    }
                 }
                 let actionText = NSMutableAttributedString(string: presentationData.strings.StarsBalance_GetMoreStars, font: Font.regular(13.0), textColor: component.theme.rootController.navigationBar.accentTextColor)
                 if let range = actionText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {

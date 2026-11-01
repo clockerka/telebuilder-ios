@@ -1827,13 +1827,19 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 
                 if self.cachedStarImage == nil || self.cachedStarImage?.1 !== theme {
-                    self.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor) {
+                        self.cachedStarImage = (image, theme)
+                    }
                 }
                 if self.cachedTonImage == nil || self.cachedTonImage?.1 !== theme {
-                    self.cachedTonImage = (generateTintedImage(image: UIImage(bundleImageName: "Ads/TonAbout"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Ads/TonAbout"), color: theme.list.itemCheckColors.foregroundColor) {
+                        self.cachedTonImage = (image, theme)
+                    }
                 }
                 if self.cachedSubtitleStarImage == nil || self.cachedSubtitleStarImage?.1 !== environment.theme {
-                    self.cachedSubtitleStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/StarsCount"), color: .white)!, theme)
+                    if let image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/StarsCount"), color: .white) {
+                        self.cachedSubtitleStarImage = (image, theme)
+                    }
                 }
                 
                 var buyString = environment.strings.Gift_View_BuyFor
