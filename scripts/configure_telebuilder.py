@@ -713,7 +713,8 @@ def reset_repo_to_baseline():
         "submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m",
         "submodules/TelegramCore/Sources/Network/Network.swift",
         "submodules/TelegramCore/Sources/Account/Account.swift",
-        "build-system/appstore-configuration.json"
+        "build-system/appstore-configuration.json",
+        "build-system/fake-codesigning/profiles/"
     ]
     try:
         subprocess.run(
