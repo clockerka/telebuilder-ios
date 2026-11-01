@@ -88,6 +88,26 @@ def run_cmd(cmd, cwd=ROOT, check=True):
         sys.exit(res.returncode)
     return res
 
+def reset_repo_to_baseline():
+    """Resets all modified branding, network, and configuration files to git HEAD (pristine Telegram)."""
+    files_to_reset = [
+        "Telegram/",
+        "submodules/LegacyComponents/Sources/TGLocalization.m",
+        "submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m",
+        "submodules/TelegramCore/Sources/Network/Network.swift",
+        "submodules/TelegramCore/Sources/Account/Account.swift",
+        "build-system/appstore-configuration.json"
+    ]
+    try:
+        subprocess.run(
+            ["git", "checkout", "HEAD", "--"] + files_to_reset,
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True
+        )
+    except Exception as e:
+        print(f"[!] Warning: failed to reset baseline: {e}")
+
 def main():
     print_header("Локальный билдер iOS Telegram для приватных серверов")
 
@@ -175,6 +195,7 @@ def main():
 
     # 3. Apply custom configuration
     print_header("Применение конфигурации сервера и брендинга")
+    reset_repo_to_baseline()
     env = os.environ.copy()
     env["APP_NAME"] = app_name
     env["AVATAR_URL"] = avatar
@@ -215,6 +236,13 @@ def main():
 
     # 5. Build with Make.py
     print(f"[*] Запуск компиляции через Make.py (это займет некоторое время)...")
+    old_ipa = ROOT / "bazel-bin/Telegram/Telegram.ipa"
+    if old_ipa.exists():
+        try:
+            old_ipa.unlink()
+        except Exception:
+            pass
+
     make_script = ROOT / "build-system/Make/Make.py"
     bazel_user_root = "/private/var/tmp/_bazel_containerhost"
 
@@ -237,7 +265,7 @@ def main():
     output_dir = ROOT / "build/artifacts"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_name = re.sub(r'[^a-zA-Z0-9_\- ]', '', app_name).strip() or "Telegram"
+    safe_name = re.sub(r'[/\\:*?"<>|]', '', app_name).strip() or "Telegram"
     final_ipa_path = output_dir / f"{safe_name}.ipa"
 
     found_ipa = None
@@ -262,6 +290,12 @@ def main():
     print(f"  {BOLD}Файл:{RESET}    {final_ipa_path}")
     print(f"  {BOLD}Размер:{RESET}  {file_size_mb:.1f} MB")
     print(f"  {BOLD}Версия:{RESET}  {app_version} ({build_number})")
+
+    # Cleanup repository working tree back to baseline
+    print_header("Очистка рабочего дерева репозитория")
+    print(f"[*] Возврат файлов репозитория к чистому состоянию Telegram...")
+    reset_repo_to_baseline()
+    print(f"{GREEN}✓ Репозиторий очищен и готов к следующей сборке с любым другим брендом.{RESET}")
 
     # Collect dSYMs if present
     dsym_dir = ROOT / "build/DSYMs"

@@ -116,14 +116,52 @@ def convert_and_apply_icons(avatar_url: str):
         if not converted or not master_png.exists():
             raise SystemExit("Failed to convert avatar to PNG. Ensure ImageMagick, sips, or Pillow is available.")
 
-        # Target asset catalogs to update
-        catalogs = [
-            ROOT / "Telegram/Telegram-iOS/AppIcons.xcassets/BlueIcon.appiconset",
-            ROOT / "Telegram/Telegram-iOS/AppIcons.xcassets/BlueFilledIcon.appiconset",
-            ROOT / "Telegram/Telegram-iOS/AppIcons.xcassets/BlackIcon.appiconset",
-            ROOT / "Telegram/Telegram-iOS/AppIcons.xcassets/BlackFilledIcon.appiconset",
-            ROOT / "Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset"
-        ]
+        def resize_file(src: Path, dst: Path, target_w: int, target_h: int):
+            if has_magick:
+                subprocess.run(
+                    ["magick", str(src), "-resize", f"{target_w}x{target_h}!", str(dst)],
+                    check=True
+                )
+            elif has_sips:
+                subprocess.run(
+                    ["sips", "-z", str(target_h), str(target_w), str(src), "--out", str(dst)],
+                    check=True,
+                    capture_output=True
+                )
+            else:
+                from PIL import Image
+                with Image.open(src) as im:
+                    im.resize((target_w, target_h), Image.Resampling.LANCZOS).save(dst, "PNG")
+
+        def get_dimensions(png_path: Path):
+            if has_sips:
+                try:
+                    res = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(png_path)], capture_output=True, text=True)
+                    w = re.search(r'pixelWidth:\s*(\d+)', res.stdout)
+                    h = re.search(r'pixelHeight:\s*(\d+)', res.stdout)
+                    if w and h:
+                        return int(w.group(1)), int(h.group(1))
+                except Exception:
+                    pass
+            if has_magick:
+                try:
+                    res = subprocess.run(["magick", "identify", "-format", "%w %h", str(png_path)], capture_output=True, text=True)
+                    parts = res.stdout.strip().split()
+                    if len(parts) == 2:
+                        return int(parts[0]), int(parts[1])
+                except Exception:
+                    pass
+            try:
+                from PIL import Image
+                with Image.open(png_path) as im:
+                    return im.size
+            except Exception:
+                pass
+            return None
+
+        # 1. Update all .appiconset catalogs
+        catalogs = list((ROOT / "Telegram/Telegram-iOS/AppIcons.xcassets").glob("*.appiconset")) + \
+                   list((ROOT / "Telegram/Telegram-iOS/DefaultAppIcon.xcassets").glob("*.appiconset"))
 
         for cat_dir in catalogs:
             contents_file = cat_dir / "Contents.json"
@@ -162,24 +200,22 @@ def convert_and_apply_icons(avatar_url: str):
                 target_h = int(round(h_pt * scale))
 
                 target_path = cat_dir / fn
+                resize_file(master_png, target_path, target_w, target_h)
 
-                if has_magick:
-                    subprocess.run(
-                        ["magick", str(master_png), "-resize", f"{target_w}x{target_h}!", str(target_path)],
-                        check=True
-                    )
-                elif has_sips:
-                    subprocess.run(
-                        ["sips", "-z", str(target_h), str(target_w), str(master_png), "--out", str(target_path)],
-                        check=True,
-                        capture_output=True
-                    )
-                else:
-                    from PIL import Image
-                    with Image.open(master_png) as im:
-                        im.resize((target_w, target_h), Image.Resampling.LANCZOS).save(target_path, "PNG")
+        print("[*] Successfully generated all AppIcon.xcassets sizes.")
 
-        print("[*] Successfully generated all AppIcon sizes.")
+        # 2. Update all alternate icon directories (*.alticon/*.png)
+        alticon_count = 0
+        for alticon_dir in (ROOT / "Telegram/Telegram-iOS").glob("*.alticon"):
+            if not alticon_dir.is_dir():
+                continue
+            for png_file in alticon_dir.glob("*.png"):
+                dims = get_dimensions(png_file)
+                if dims:
+                    w, h = dims
+                    resize_file(master_png, png_file, w, h)
+                    alticon_count += 1
+        print(f"[*] Updated {alticon_count} alternate icon files in *.alticon directories.")
 
 def resign_fake_provisioning_profiles(bundle_id: str):
     profiles_dir = ROOT / "build-system/fake-codesigning/profiles"
@@ -492,16 +528,34 @@ def configure_app_name(app_name: str):
     # 1. Telegram/BUILD
     build_path = ROOT / "Telegram/BUILD"
     build_content = build_path.read_text()
-    build_content = re.sub(
-        r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)',
-        rf'\g<1>{escaped_name}\2',
-        build_content
-    )
-    build_content = re.sub(
-        r'(<key>CFBundleName</key>\s*<string>)[^<]*(</string>)',
-        rf'\g<1>{escaped_name}\2',
-        build_content
-    )
+
+    # Specifically update CFBundleDisplayName in AppNameInfoPlist and TelegramInfoPlist
+    for plist_name in ["AppNameInfoPlist", "TelegramInfoPlist"]:
+        build_content = re.sub(
+            rf'(name\s*=\s*"{plist_name}".*?<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)',
+            rf'\g<1>{escaped_name}\2',
+            build_content,
+            flags=re.DOTALL
+        )
+
+    # Specifically update CFBundleName in TelegramInfoPlist and extensions
+    target_plists = [
+        "TelegramInfoPlist",
+        "ShareInfoPlist",
+        "NotificationContentInfoPlist",
+        "WidgetInfoPlist",
+        "SiriIntentsInfoPlist",
+        "BroadcastUploadInfoPlist",
+        "NotificationServiceInfoPlist"
+    ]
+    for plist_name in target_plists:
+        build_content = re.sub(
+            rf'(name\s*=\s*"{plist_name}".*?<key>CFBundleName</key>\s*<string>)[^<]*(</string>)',
+            rf'\g<1>{escaped_name}\2',
+            build_content,
+            flags=re.DOTALL
+        )
+
     build_path.write_text(build_content)
 
     # 2. Info.plist & InfoBazel.plist
@@ -509,6 +563,7 @@ def configure_app_name(app_name: str):
         if p.exists():
             s = p.read_text()
             s = re.sub(r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)', rf'\g<1>{escaped_name}\2', s)
+            s = re.sub(r'(<key>CFBundleName</key>\s*<string>)[^<]*(</string>)', rf'\g<1>{escaped_name}\2', s)
             p.write_text(s)
 
     rebrand_app_ui(app_name)
@@ -639,11 +694,40 @@ def configure_build_files(bundle_id: str, api_id: str, api_hash: str):
     if old_app_icons in build_content:
         build_content = build_content.replace(old_app_icons, new_app_icons, 1)
 
+    # 3. Disable composer_icon_folders so Telegram.icon vector is not built
+    build_content = re.sub(
+        r'composer_icon_folders\s*=\s*\[[^\]]*\]',
+        'composer_icon_folders = []',
+        build_content
+    )
+
     build_path.write_text(build_content)
     print(f"[*] Configured build-system configuration files for bundle ID '{bundle_id}'")
 
+def reset_repo_to_baseline():
+    """Resets all modified branding, network, and configuration files to git HEAD (pristine Telegram)."""
+    print("[*] Ensuring repository is at clean Telegram baseline before configuration...")
+    files_to_reset = [
+        "Telegram/",
+        "submodules/LegacyComponents/Sources/TGLocalization.m",
+        "submodules/MtProtoKit/Sources/MTDatacenterAuthMessageService.m",
+        "submodules/TelegramCore/Sources/Network/Network.swift",
+        "submodules/TelegramCore/Sources/Account/Account.swift",
+        "build-system/appstore-configuration.json"
+    ]
+    try:
+        subprocess.run(
+            ["git", "checkout", "HEAD", "--"] + files_to_reset,
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True
+        )
+    except Exception as e:
+        print(f"[!] Note: git checkout baseline: {e}")
+
 def main():
     print("=== Telebuilder iOS Configuration Script ===")
+    reset_repo_to_baseline()
     app_name = get_required("APP_NAME")
     avatar_url = get_required("AVATAR_URL")
     server_ip = get_required("SERVER_IP")
